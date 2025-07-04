@@ -233,7 +233,7 @@ func (l *Lexer) isHex(s string) bool {
 
 func (l *Lexer) isKnownCommand(s string) bool {
 	commands := map[string]bool{
-		// Comandos de sistema
+		// Comandos de sistema básicos
 		"ls": true, "cat": true, "grep": true, "find": true, "ps": true,
 		"top": true, "htop": true, "netstat": true, "ss": true, "lsof": true,
 		"whoami": true, "id": true, "uname": true, "hostname": true,
@@ -266,6 +266,51 @@ func (l *Lexer) isKnownCommand(s string) bool {
 		// Comandos de red avanzados
 		"iptables": true, "nmap": true, "tcpdump": true, "wireshark": true,
 		"arp": true, "route": true, "ip": true, "ifconfig": true,
+		
+		// Comandos adicionales importantes
+		"echo": true, "printf": true, "test": true, "bash": true, "sh": true,
+		"awk": true, "sed": true, "sort": true, "uniq": true, "cut": true,
+		"tr": true, "wc": true, "xargs": true, "tee": true, "diff": true,
+		"which": true, "whereis": true, "locate": true, "updatedb": true,
+		"history": true, "alias": true, "unalias": true, "export": true,
+		"env": true, "printenv": true, "set": true, "unset": true,
+		"jobs": true, "fg": true, "bg": true, "disown": true,
+		"clear": true, "reset": true, "date": true, "cal": true,
+		"uptime": true, "w": true, "who": true, "last": true,
+		"vim": true, "vi": true, "nano": true, "emacs": true,
+		"make": true, "gcc": true, "python": true, "python3": true,
+		"git": true, "docker": true, "kubectl": true,
+		"mysql": true, "psql": true, "sqlite3": true,
+		"apache2": true, "nginx": true, "httpd": true,
+		"base64": true, "openssl": true, "gpg": true,
+		"md5sum": true, "sha1sum": true, "sha256sum": true,
+		"dd": true, "hexdump": true, "strings": true, "xxd": true,
+		"strace": true, "ltrace": true, "gdb": true,
+		"john": true, "hashcat": true, "hydra": true,
+		"metasploit": true, "msfconsole": true, "msfvenom": true,
+		"aircrack-ng": true, "nikto": true, "dirb": true,
+		"gobuster": true, "ffuf": true, "wfuzz": true,
+		"sqlmap": true, "burpsuite": true, "nessus": true,
+		"volatility": true, "autopsy": true, "binwalk": true,
+		"foremost": true, "photorec": true, "testdisk": true,
+		"chkrootkit": true, "rkhunter": true, "lynis": true,
+		"fail2ban": true, "aide": true, "tripwire": true,
+		"clamav": true, "freshclam": true, "maldet": true,
+		"socat": true, "netcat": true, "stunnel": true,
+		"openvpn": true, "tor": true, "proxychains": true,
+		"steghide": true, "exiftool": true, "yara": true,
+		"masscan": true, "zmap": true, "hping3": true,
+		"ettercap": true, "bettercap": true, "mitmproxy": true,
+		"dsniff": true, "tcpkill": true, "scapy": true,
+		"ncrack": true, "medusa": true, "patator": true,
+		"wpscan": true, "joomscan": true, "droopescan": true,
+		"cmseek": true, "whatweb": true, "webtech": true,
+		"sublist3r": true, "amass": true, "subfinder": true,
+		"assetfinder": true, "findomain": true, "knockpy": true,
+		"dnsrecon": true, "fierce": true, "dnsmap": true,
+		"theharvester": true, "maltego": true, "recon-ng": true,
+		"spiderfoot": true, "shodan": true, "censys": true,
+		"rustscan": true, "naabu": true, "sx": true, "unicornscan": true,
 	}
 
 	return commands[s]

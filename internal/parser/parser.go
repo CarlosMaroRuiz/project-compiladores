@@ -42,7 +42,7 @@ func (p *Parser) parseCommandLine() (*models.ASTNode, error) {
 		root.Children = append(root.Children, pipeline)
 
 		// Verificar separadores entre comandos
-		if p.current.Type == models.SEMICOLON || p.current.Type == models.AMPERSAND {
+		if p.current.Type == models.SEMICOLON {
 			separator := &models.ASTNode{
 				Type:  "Separator",
 				Value: p.current.Value,
@@ -50,13 +50,26 @@ func (p *Parser) parseCommandLine() (*models.ASTNode, error) {
 			}
 			root.Children = append(root.Children, separator)
 			p.advance()
-		} else if p.current.Type != models.EOF {
-			return nil, &models.ParseError{
-				Message:  "separador de comando inesperado",
-				Token:    &p.current,
-				Expected: "; o &",
-				Got:      p.current.Value,
+		} else if p.current.Type == models.AMPERSAND {
+			separator := &models.ASTNode{
+				Type:  "Separator",
+				Value: p.current.Value,
+				Token: &p.current,
 			}
+			root.Children = append(root.Children, separator)
+			p.advance()
+		} else if p.current.Type == models.OPERATOR {
+			// Manejar operadores lógicos && y ||
+			operator := &models.ASTNode{
+				Type:  "LogicalOperator",
+				Value: p.current.Value,
+				Token: &p.current,
+			}
+			root.Children = append(root.Children, operator)
+			p.advance()
+		} else if p.current.Type != models.EOF {
+			// Si no es EOF, continuar - puede ser parte de un comando complejo
+			break
 		}
 	}
 
@@ -102,7 +115,7 @@ func (p *Parser) parseCommand() (*models.ASTNode, error) {
 		Children: []*models.ASTNode{},
 	}
 
-	// Verificar operadores lógicos (&&, ||)
+	// Verificar operadores lógicos (&&, ||) al principio
 	if p.current.Type == models.OPERATOR {
 		operator := &models.ASTNode{
 			Type:  "LogicalOperator",
@@ -113,8 +126,9 @@ func (p *Parser) parseCommand() (*models.ASTNode, error) {
 		p.advance()
 	}
 
-	// El primer token debe ser un comando
-	if p.current.Type != models.COMMAND {
+	// Aceptar tanto COMMAND como PARAMETER como comandos válidos
+	// Esto soluciona el problema con sudo, find, curl, etc.
+	if p.current.Type != models.COMMAND && p.current.Type != models.PARAMETER {
 		return nil, &models.ParseError{
 			Message:  "se esperaba un comando",
 			Token:    &p.current,
@@ -123,7 +137,7 @@ func (p *Parser) parseCommand() (*models.ASTNode, error) {
 		}
 	}
 
-	// Nodo del comando principal
+	// Nodo del comando principal - tratar tanto COMMAND como PARAMETER como comandos válidos
 	cmdNode := &models.ASTNode{
 		Type:  "CommandName",
 		Value: p.current.Value,
@@ -156,7 +170,7 @@ func (p *Parser) parseCommand() (*models.ASTNode, error) {
 			
 		case models.PARAMETER, models.PATH, models.STRING, models.NUMBER, 
 			 models.IP_ADDRESS, models.PORT, models.URL, models.VARIABLE,
-			 models.WILDCARD, models.ENCODED:
+			 models.WILDCARD, models.ENCODED, models.COMMAND:
 			arg := &models.ASTNode{
 				Type:  "Argument",
 				Value: p.current.Value,
@@ -166,12 +180,14 @@ func (p *Parser) parseCommand() (*models.ASTNode, error) {
 			p.advance()
 			
 		default:
-			return nil, &models.ParseError{
-				Message:  "token inesperado en comando",
-				Token:    &p.current,
-				Expected: "argumento, flag o redirección",
-				Got:      p.current.Value,
+			// En lugar de fallar, simplemente avanzar para ser más permisivo
+			arg := &models.ASTNode{
+				Type:  "Argument",
+				Value: p.current.Value,
+				Token: &p.current,
 			}
+			command.Children = append(command.Children, arg)
+			p.advance()
 		}
 	}
 

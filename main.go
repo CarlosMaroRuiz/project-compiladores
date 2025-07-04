@@ -89,13 +89,11 @@ func main() {
 	fmt.Println("Iniciando análisis de comandos...")
 
 	monitor := NewSecurityMonitor()
-	commandChan := make(chan models.CommandInput, 100)
-
-	// Goroutine para procesar comandos
-	go monitor.MonitorCommands(commandChan)
-
-	// Simulador de entrada de comandos (en producción sería un log reader)
-	go simulateCommandInput(commandChan)
+	
+	// Comentar el simulador automático para permitir entrada manual
+	// commandChan := make(chan models.CommandInput, 100)
+	// go monitor.MonitorCommands(commandChan)
+	// go simulateCommandInput(commandChan)
 
 	// Interfaz interactiva
 	scanner := bufio.NewScanner(os.Stdin)
@@ -119,20 +117,37 @@ func main() {
 		// Procesar comando en tiempo real
 		result, err := monitor.ProcessCommand(input, "usuario_test", time.Now())
 		if err != nil {
-			fmt.Printf("Error: %v\n", err)
+			fmt.Printf("❌ Error: %v\n", err)
 			continue
 		}
 
-		fmt.Printf("Análisis completado:\n")
-		fmt.Printf("  Nivel de Riesgo: %s\n", result.RiskLevel)
-		fmt.Printf("  Puntuación: %.2f\n", result.RiskScore)
-		if len(result.Reasons) > 0 {
-			fmt.Printf("  Razones: %v\n", result.Reasons)
+		// Mostrar resultado con colores
+		fmt.Printf("\n📊 Análisis completado:\n")
+		fmt.Printf("  🎯 Comando: %s\n", result.OriginalCommand)
+		fmt.Printf("  👤 Usuario: %s\n", result.User)
+		fmt.Printf("  ⚠️  Nivel de Riesgo: %s\n", result.RiskLevel)
+		fmt.Printf("  📈 Puntuación: %.2f\n", result.RiskScore)
+		
+		if len(result.ThreatCategories) > 0 {
+			fmt.Printf("  🚨 Categorías de Amenaza: %v\n", result.ThreatCategories)
 		}
+		
+		if len(result.Reasons) > 0 {
+			fmt.Printf("  💡 Razones: %v\n", result.Reasons)
+		}
+		
+		if len(result.Recommendations) > 0 {
+			fmt.Printf("  🔧 Recomendaciones: %v\n", result.Recommendations)
+		}
+		
+		if result.IsBlocked {
+			fmt.Printf("  🚫 COMANDO BLOQUEADO\n")
+		}
+		
+		fmt.Printf("  ⏱️  Tiempo de procesamiento: %v\n", result.ProcessingTime)
 		fmt.Println()
 	}
 
-	close(commandChan)
 	fmt.Println("Sistema de monitoreo detenido.")
 }
 
