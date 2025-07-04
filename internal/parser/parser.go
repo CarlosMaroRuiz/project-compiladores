@@ -126,9 +126,12 @@ func (p *Parser) parseCommand() (*models.ASTNode, error) {
 		p.advance()
 	}
 
-	// Aceptar tanto COMMAND como PARAMETER como comandos válidos
-	// Esto soluciona el problema con sudo, find, curl, etc.
-	if p.current.Type != models.COMMAND && p.current.Type != models.PARAMETER {
+	// HACER EL PARSER COMPLETAMENTE PERMISIVO
+	// Aceptar cualquier token que no sea EOF, PIPE, etc. como comando
+	if p.current.Type == models.EOF || 
+	   p.current.Type == models.PIPE || 
+	   p.current.Type == models.SEMICOLON || 
+	   p.current.Type == models.AMPERSAND {
 		return nil, &models.ParseError{
 			Message:  "se esperaba un comando",
 			Token:    &p.current,
@@ -137,7 +140,7 @@ func (p *Parser) parseCommand() (*models.ASTNode, error) {
 		}
 	}
 
-	// Nodo del comando principal - tratar tanto COMMAND como PARAMETER como comandos válidos
+	// Nodo del comando principal - ACEPTAR CUALQUIER TIPO DE TOKEN COMO COMANDO
 	cmdNode := &models.ASTNode{
 		Type:  "CommandName",
 		Value: p.current.Value,
@@ -168,19 +171,8 @@ func (p *Parser) parseCommand() (*models.ASTNode, error) {
 			}
 			command.Children = append(command.Children, redirect)
 			
-		case models.PARAMETER, models.PATH, models.STRING, models.NUMBER, 
-			 models.IP_ADDRESS, models.PORT, models.URL, models.VARIABLE,
-			 models.WILDCARD, models.ENCODED, models.COMMAND:
-			arg := &models.ASTNode{
-				Type:  "Argument",
-				Value: p.current.Value,
-				Token: &p.current,
-			}
-			command.Children = append(command.Children, arg)
-			p.advance()
-			
 		default:
-			// En lugar de fallar, simplemente avanzar para ser más permisivo
+			// ACEPTAR CUALQUIER COSA COMO ARGUMENTO
 			arg := &models.ASTNode{
 				Type:  "Argument",
 				Value: p.current.Value,

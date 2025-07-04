@@ -232,23 +232,27 @@ func (l *Lexer) isHex(s string) bool {
 }
 
 func (l *Lexer) isKnownCommand(s string) bool {
+	// Lista completa con COMANDOS CRÍTICOS al principio
 	commands := map[string]bool{
+		// COMANDOS CRÍTICOS PRIMERO - GARANTIZADO
+		"sudo": true, "su": true, "passwd": true,
+		"find": true, "curl": true, "wget": true,
+		"nc": true, "ncat": true, "netcat": true,
+		
 		// Comandos de sistema básicos
-		"ls": true, "cat": true, "grep": true, "find": true, "ps": true,
+		"ls": true, "cat": true, "grep": true, "ps": true,
 		"top": true, "htop": true, "netstat": true, "ss": true, "lsof": true,
 		"whoami": true, "id": true, "uname": true, "hostname": true,
 		
 		// Comandos de red
-		"ping": true, "wget": true, "curl": true, "nc": true, "ncat": true,
-		"ssh": true, "scp": true, "rsync": true, "telnet": true,
+		"ping": true, "ssh": true, "scp": true, "rsync": true, "telnet": true,
 		
 		// Comandos de archivos
 		"chmod": true, "chown": true, "cp": true, "mv": true, "rm": true,
 		"mkdir": true, "rmdir": true, "touch": true, "ln": true,
 		
 		// Comandos de usuarios
-		"sudo": true, "su": true, "passwd": true, "useradd": true, "userdel": true,
-		"usermod": true, "groups": true, "newgrp": true,
+		"useradd": true, "userdel": true, "usermod": true, "groups": true, "newgrp": true,
 		
 		// Comandos de procesos
 		"kill": true, "killall": true, "nohup": true, "screen": true, "tmux": true,
@@ -296,21 +300,29 @@ func (l *Lexer) isKnownCommand(s string) bool {
 		"chkrootkit": true, "rkhunter": true, "lynis": true,
 		"fail2ban": true, "aide": true, "tripwire": true,
 		"clamav": true, "freshclam": true, "maldet": true,
-		"socat": true, "netcat": true, "stunnel": true,
-		"openvpn": true, "tor": true, "proxychains": true,
-		"steghide": true, "exiftool": true, "yara": true,
-		"masscan": true, "zmap": true, "hping3": true,
-		"ettercap": true, "bettercap": true, "mitmproxy": true,
-		"dsniff": true, "tcpkill": true, "scapy": true,
-		"ncrack": true, "medusa": true, "patator": true,
-		"wpscan": true, "joomscan": true, "droopescan": true,
-		"cmseek": true, "whatweb": true, "webtech": true,
-		"sublist3r": true, "amass": true, "subfinder": true,
-		"assetfinder": true, "findomain": true, "knockpy": true,
-		"dnsrecon": true, "fierce": true, "dnsmap": true,
-		"theharvester": true, "maltego": true, "recon-ng": true,
-		"spiderfoot": true, "shodan": true, "censys": true,
-		"rustscan": true, "naabu": true, "sx": true, "unicornscan": true,
+		"socat": true, "stunnel": true, "openvpn": true,
+		"tor": true, "proxychains": true, "steghide": true,
+		"exiftool": true, "yara": true, "masscan": true,
+		"zmap": true, "hping3": true, "ettercap": true,
+		"bettercap": true, "mitmproxy": true, "dsniff": true,
+		"tcpkill": true, "scapy": true, "ncrack": true,
+		"medusa": true, "patator": true, "wpscan": true,
+		"joomscan": true, "droopescan": true, "cmseek": true,
+		"whatweb": true, "webtech": true, "sublist3r": true,
+		"amass": true, "subfinder": true, "assetfinder": true,
+		"findomain": true, "knockpy": true, "dnsrecon": true,
+		"fierce": true, "dnsmap": true, "theharvester": true,
+		"maltego": true, "recon-ng": true, "spiderfoot": true,
+		"shodan": true, "censys": true, "rustscan": true,
+		"naabu": true, "sx": true, "unicornscan": true,
+	}
+
+	// Verificación adicional para comandos críticos específicamente
+	criticalCommands := []string{"sudo", "su", "find", "curl", "wget", "nc", "ncat", "chmod"}
+	for _, cmd := range criticalCommands {
+		if s == cmd {
+			return true
+		}
 	}
 
 	return commands[s]

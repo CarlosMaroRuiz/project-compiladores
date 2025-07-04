@@ -90,12 +90,7 @@ func main() {
 
 	monitor := NewSecurityMonitor()
 	
-	// Comentar el simulador automático para permitir entrada manual
-	// commandChan := make(chan models.CommandInput, 100)
-	// go monitor.MonitorCommands(commandChan)
-	// go simulateCommandInput(commandChan)
-
-	// Interfaz interactiva
+	// Interfaz interactiva mejorada
 	scanner := bufio.NewScanner(os.Stdin)
 	fmt.Println("\nIngresa comandos para analizar (escribe 'exit' para salir):")
 
@@ -121,7 +116,7 @@ func main() {
 			continue
 		}
 
-		// Mostrar resultado con colores
+		// Mostrar resultado con formato mejorado
 		fmt.Printf("\n📊 Análisis completado:\n")
 		fmt.Printf("  🎯 Comando: %s\n", result.OriginalCommand)
 		fmt.Printf("  👤 Usuario: %s\n", result.User)
