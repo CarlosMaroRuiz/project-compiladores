@@ -166,9 +166,213 @@ func (l *Lexer) determineTokenType(identifier string) models.TokenType {
 		return models.COMMAND
 	}
 
+	// NUEVA VALIDACIÓN: Verificar si podría ser un comando mal escrito
+	if l.couldBeInvalidCommand(identifier) {
+		return models.INVALID_COMMAND
+	}
+
 	// Por defecto, es un parámetro
 	return models.PARAMETER
 }
+
+// NUEVAS FUNCIONES PARA VALIDACIÓN DE COMANDOS
+
+// couldBeInvalidCommand determina si un identificador podría ser un comando mal escrito
+func (l *Lexer) couldBeInvalidCommand(s string) bool {
+	// Si contiene solo letras y está en posición de comando, podría ser un comando mal escrito
+	if len(s) < 2 || len(s) > 20 {
+		return false
+	}
+	
+	// Verificar que contenga solo letras (sin números ni símbolos)
+	for _, char := range s {
+		if !((char >= 'a' && char <= 'z') || (char >= 'A' && char <= 'Z')) {
+			return false
+		}
+	}
+	
+	// Verificar si hay sugerencias cercanas
+	suggestions := l.SuggestSimilarCommands(s)
+	return len(suggestions) > 0
+}
+
+// SuggestSimilarCommands sugiere comandos similares basado en distancia de Levenshtein
+func (l *Lexer) SuggestSimilarCommands(command string) []models.CommandSuggestion {
+	var suggestions []models.CommandSuggestion
+	knownCommands := l.getAllKnownCommands()
+	
+	for _, knownCmd := range knownCommands {
+		distance := l.levenshteinDistance(command, knownCmd)
+		// Solo sugerir si la distancia es pequeña (máximo 3 caracteres)
+		if distance <= 3 && distance > 0 {
+			suggestions = append(suggestions, models.CommandSuggestion{
+				Original:  command,
+				Suggested: knownCmd,
+				Distance:  distance,
+			})
+		}
+	}
+	
+	// Ordenar por distancia (burbuja simple)
+	for i := 0; i < len(suggestions)-1; i++ {
+		for j := i + 1; j < len(suggestions); j++ {
+			if suggestions[i].Distance > suggestions[j].Distance {
+				suggestions[i], suggestions[j] = suggestions[j], suggestions[i]
+			}
+		}
+	}
+	
+	// Retornar máximo 3 sugerencias
+	if len(suggestions) > 3 {
+		suggestions = suggestions[:3]
+	}
+	
+	return suggestions
+}
+
+// levenshteinDistance calcula la distancia de Levenshtein entre dos strings
+func (l *Lexer) levenshteinDistance(s1, s2 string) int {
+	if len(s1) == 0 {
+		return len(s2)
+	}
+	if len(s2) == 0 {
+		return len(s1)
+	}
+
+	matrix := make([][]int, len(s1)+1)
+	for i := range matrix {
+		matrix[i] = make([]int, len(s2)+1)
+		matrix[i][0] = i
+	}
+	for j := 0; j <= len(s2); j++ {
+		matrix[0][j] = j
+	}
+
+	for i := 1; i <= len(s1); i++ {
+		for j := 1; j <= len(s2); j++ {
+			cost := 0
+			if s1[i-1] != s2[j-1] {
+				cost = 1
+			}
+			matrix[i][j] = l.min3(
+				matrix[i-1][j]+1,      // deletion
+				matrix[i][j-1]+1,      // insertion
+				matrix[i-1][j-1]+cost, // substitution
+			)
+		}
+	}
+	return matrix[len(s1)][len(s2)]
+}
+
+// min3 retorna el mínimo de tres enteros
+func (l *Lexer) min3(a, b, c int) int {
+	if a < b && a < c {
+		return a
+	}
+	if b < c {
+		return b
+	}
+	return c
+}
+
+// getAllKnownCommands retorna todos los comandos conocidos
+func (l *Lexer) getAllKnownCommands() []string {
+	return []string{
+		// COMANDOS CRÍTICOS PRIMERO
+		"sudo", "su", "passwd", "find", "curl", "wget", "nc", "ncat", "netcat",
+		
+		// Comandos de sistema básicos
+		"ls", "cat", "grep", "ps", "top", "htop", "netstat", "ss", "lsof",
+		"whoami", "id", "uname", "hostname", "ping", "ssh", "scp", "rsync",
+		"telnet", "chmod", "chown", "cp", "mv", "rm", "mkdir", "rmdir",
+		"touch", "ln", "useradd", "userdel", "usermod", "groups", "newgrp",
+		"kill", "killall", "nohup", "screen", "tmux", "tar", "gzip", "gunzip",
+		"zip", "unzip", "tail", "head", "less", "more", "watch", "mount",
+		"umount", "df", "du", "free", "crontab", "systemctl", "service",
+		"chkconfig", "iptables", "nmap", "tcpdump", "wireshark", "arp",
+		"route", "ip", "ifconfig", "echo", "printf", "test", "bash", "sh",
+		"awk", "sed", "sort", "uniq", "cut", "tr", "wc", "xargs", "tee",
+		"diff", "which", "whereis", "locate", "updatedb", "history", "alias",
+		"unalias", "export", "env", "printenv", "set", "unset", "jobs",
+		"fg", "bg", "disown", "clear", "reset", "date", "cal", "uptime",
+		"w", "who", "last", "vim", "vi", "nano", "emacs", "make", "gcc",
+		"python", "python3", "git", "docker", "kubectl", "mysql", "psql",
+		"sqlite3", "apache2", "nginx", "httpd", "base64", "openssl", "gpg",
+		"md5sum", "sha1sum", "sha256sum", "dd", "hexdump", "strings", "xxd",
+		"strace", "ltrace", "gdb", "john", "hashcat", "hydra", "metasploit",
+		"msfconsole", "msfvenom", "aircrack-ng", "nikto", "dirb", "gobuster",
+		"ffuf", "wfuzz", "sqlmap", "burpsuite", "nessus", "volatility",
+		"autopsy", "binwalk", "foremost", "photorec", "testdisk", "chkrootkit",
+		"rkhunter", "lynis", "fail2ban", "aide", "tripwire", "clamav",
+		"freshclam", "maldet", "socat", "stunnel", "openvpn", "tor",
+		"proxychains", "steghide", "exiftool", "yara", "masscan", "zmap",
+		"hping3", "ettercap", "bettercap", "mitmproxy", "dsniff", "tcpkill",
+		"scapy", "ncrack", "medusa", "patator", "wpscan", "joomscan",
+		"droopescan", "cmseek", "whatweb", "webtech", "sublist3r", "amass",
+		"subfinder", "assetfinder", "findomain", "knockpy", "dnsrecon",
+		"fierce", "dnsmap", "theharvester", "maltego", "recon-ng",
+		"spiderfoot", "shodan", "censys", "rustscan", "naabu", "sx",
+		"unicornscan",
+	}
+}
+
+// checkCommonTypos verifica errores de escritura comunes
+func (l *Lexer) CheckCommonTypos(command string) string {
+	commonTypos := map[string]string{
+		"lst":      "ls",
+		"sl":       "ls",
+		"cta":      "cat",
+		"ehco":     "echo",
+		"chmdo":    "chmod",
+		"mkdri":    "mkdir",
+		"pign":     "ping",
+		"grap":     "grep",
+		"sudp":     "sudo",
+		"tial":     "tail",
+		"haed":     "head",
+		"killl":    "kill",
+		"whaoami":  "whoami",
+		"cul":      "curl",
+		"wgte":     "wget",
+		"pws":      "ps",
+		"chmown":   "chown",
+		"mkdi":     "mkdir",
+		"rmdi":     "rmdir",
+		"tuch":     "touch",
+		"chrmod":   "chmod",
+		"sudoo":    "sudo",
+		"pytohn":   "python",
+		"pythno":   "python",
+		"gti":      "git",
+		"dockre":   "docker",
+		"systmctl": "systemctl",
+		"servcie":  "service",
+		"iptbales": "iptables",
+		"nmpa":     "nmap",
+		"shs":      "ssh",
+		"grpe":     "grep",
+		"fdin":     "find",
+		"laes":     "less",
+		"mroe":     "more",
+		"wathc":    "watch",
+		"df":       "df",
+		"ud":       "du",
+		"erf":      "free",
+	}
+	
+	if correction, exists := commonTypos[command]; exists {
+		return correction
+	}
+	
+	return ""
+}
+
+// IsKnownCommand exporta la función para uso externo (con I mayúscula)
+func (l *Lexer) IsKnownCommand(command string) bool {
+	return l.isKnownCommand(command)
+}
+
+// FUNCIONES ORIGINALES (sin cambios)
 
 func (l *Lexer) isPath(s string) bool {
 	pathPatterns := []string{

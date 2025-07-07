@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"security-monitor/internal/lexer"
 	"security-monitor/internal/models"
 )
 
@@ -126,8 +127,7 @@ func (p *Parser) parseCommand() (*models.ASTNode, error) {
 		p.advance()
 	}
 
-	// HACER EL PARSER COMPLETAMENTE PERMISIVO
-	// Aceptar cualquier token que no sea EOF, PIPE, etc. como comando
+	// Verificar que hay un comando válido
 	if p.current.Type == models.EOF || 
 	   p.current.Type == models.PIPE || 
 	   p.current.Type == models.SEMICOLON || 
@@ -137,6 +137,19 @@ func (p *Parser) parseCommand() (*models.ASTNode, error) {
 			Token:    &p.current,
 			Expected: "comando válido",
 			Got:      p.current.Value,
+		}
+	}
+
+	// NUEVA VALIDACIÓN: Verificar si es un comando inválido
+	if p.current.Type == models.INVALID_COMMAND {
+		return nil, p.createCommandValidationError(p.current.Value, &p.current)
+	}
+
+	// VALIDACIÓN ADICIONAL para comandos PARAMETER que podrían ser comandos mal escritos
+	if p.current.Type == models.PARAMETER {
+		if validationError := p.ValidateCommand(p.current.Value); validationError != nil {
+			validationError.Token = &p.current
+			return nil, validationError
 		}
 	}
 
@@ -185,6 +198,91 @@ func (p *Parser) parseCommand() (*models.ASTNode, error) {
 
 	return command, nil
 }
+
+// NUEVAS FUNCIONES PARA VALIDACIÓN DE COMANDOS
+
+// ValidateCommand verifica si un comando es válido y sugiere alternativas
+func (p *Parser) ValidateCommand(commandName string) *models.CommandValidationError {
+	lexerInstance := lexer.New()
+	
+	// Verificar si es un comando conocido
+	if lexerInstance.IsKnownCommand(commandName) {
+		return nil // Comando válido
+	}
+	
+	// Verificar errores de escritura comunes primero
+	commonCorrection := lexerInstance.CheckCommonTypos(commandName)
+	if commonCorrection != "" {
+		return &models.CommandValidationError{
+			OriginalCommand: commandName,
+			Suggestions: []models.CommandSuggestion{
+				{
+					Original:  commandName,
+					Suggested: commonCorrection,
+					Distance:  1,
+				},
+			},
+			Message: fmt.Sprintf("Comando '%s' no reconocido", commandName),
+		}
+	}
+	
+	// Buscar sugerencias usando distancia de Levenshtein
+	suggestions := lexerInstance.SuggestSimilarCommands(commandName)
+	
+	if len(suggestions) > 0 {
+		return &models.CommandValidationError{
+			OriginalCommand: commandName,
+			Suggestions:     suggestions,
+			Message:         fmt.Sprintf("Comando '%s' no reconocido", commandName),
+		}
+	}
+	
+	// Si no hay sugerencias, verificar si parece un comando
+	if p.looksLikeCommand(commandName) {
+		return &models.CommandValidationError{
+			OriginalCommand: commandName,
+			Suggestions:     []models.CommandSuggestion{},
+			Message:         fmt.Sprintf("Comando '%s' es inválido y no se encontraron sugerencias", commandName),
+		}
+	}
+	
+	return nil // No parece ser un comando, podría ser un parámetro válido
+}
+
+// createCommandValidationError crea un error de validación con sugerencias
+func (p *Parser) createCommandValidationError(commandName string, token *models.Token) *models.CommandValidationError {
+	lexerInstance := lexer.New()
+	suggestions := lexerInstance.SuggestSimilarCommands(commandName)
+	
+	return &models.CommandValidationError{
+		OriginalCommand: commandName,
+		Suggestions:     suggestions,
+		Message:         fmt.Sprintf("Comando '%s' no es válido", commandName),
+		Token:           token,
+	}
+}
+
+// looksLikeCommand determina si una cadena parece ser un comando
+func (p *Parser) looksLikeCommand(s string) bool {
+	// Un comando probable:
+	// - Solo contiene letras (a-z, A-Z)
+	// - Tiene entre 2 y 20 caracteres
+	// - No contiene números ni símbolos especiales
+	
+	if len(s) < 2 || len(s) > 20 {
+		return false
+	}
+	
+	for _, char := range s {
+		if !((char >= 'a' && char <= 'z') || (char >= 'A' && char <= 'Z')) {
+			return false
+		}
+	}
+	
+	return true
+}
+
+// FUNCIONES ORIGINALES (sin cambios)
 
 func (p *Parser) parseFlag() (*models.ASTNode, error) {
 	flag := &models.ASTNode{

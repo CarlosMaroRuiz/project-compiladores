@@ -28,29 +28,31 @@ const (
 	NUMBER
 	ENCODED
 	WILDCARD
+	INVALID_COMMAND // NUEVO: Para comandos inválidos
 	EOF
 )
 
 var tokenNames = map[TokenType]string{
-	COMMAND:      "COMMAND",
-	PARAMETER:    "PARAMETER",
-	FLAG:         "FLAG",
-	PATH:         "PATH",
-	OPERATOR:     "OPERATOR",
-	REDIRECT:     "REDIRECT",
-	PIPE:         "PIPE",
-	SEMICOLON:    "SEMICOLON",
-	AMPERSAND:    "AMPERSAND",
-	IP_ADDRESS:   "IP_ADDRESS",
-	PORT:         "PORT",
-	URL:          "URL",
-	VARIABLE:     "VARIABLE",
-	SPECIAL_CHAR: "SPECIAL_CHAR",
-	STRING:       "STRING",
-	NUMBER:       "NUMBER",
-	ENCODED:      "ENCODED",
-	WILDCARD:     "WILDCARD",
-	EOF:          "EOF",
+	COMMAND:         "COMMAND",
+	PARAMETER:       "PARAMETER",
+	FLAG:            "FLAG",
+	PATH:            "PATH",
+	OPERATOR:        "OPERATOR",
+	REDIRECT:        "REDIRECT",
+	PIPE:            "PIPE",
+	SEMICOLON:       "SEMICOLON",
+	AMPERSAND:       "AMPERSAND",
+	IP_ADDRESS:      "IP_ADDRESS",
+	PORT:            "PORT",
+	URL:             "URL",
+	VARIABLE:        "VARIABLE",
+	SPECIAL_CHAR:    "SPECIAL_CHAR",
+	STRING:          "STRING",
+	NUMBER:          "NUMBER",
+	ENCODED:         "ENCODED",
+	WILDCARD:        "WILDCARD",
+	INVALID_COMMAND: "INVALID_COMMAND",
+	EOF:             "EOF",
 }
 
 func (t TokenType) String() string {
@@ -216,11 +218,33 @@ func (e *ParseError) Error() string {
 	return fmt.Sprintf("error de parsing: %s", e.Message)
 }
 
+// NUEVAS ESTRUCTURAS PARA VALIDACIÓN DE COMANDOS
+
+// CommandSuggestion representa una sugerencia de comando
+type CommandSuggestion struct {
+	Original  string
+	Suggested string
+	Distance  int
+}
+
+// CommandValidationError representa errores de validación de comandos
+type CommandValidationError struct {
+	OriginalCommand string
+	Suggestions     []CommandSuggestion
+	Message         string
+	Token           *Token
+}
+
+func (e *CommandValidationError) Error() string {
+	return e.Message
+}
+
 // CommandStats mantiene estadísticas de comandos
 type CommandStats struct {
 	TotalCommands    int
 	RiskyCommands    int
 	BlockedCommands  int
+	InvalidCommands  int // NUEVO: Contador de comandos inválidos
 	UserStats        map[string]*UserStats
 	CategoryStats    map[CommandCategory]int
 	ThreatStats      map[ThreatCategory]int
@@ -230,9 +254,10 @@ type CommandStats struct {
 
 // UserStats estadísticas por usuario
 type UserStats struct {
-	CommandCount    int
-	RiskScore       float64
-	LastActivity    time.Time
-	MostUsedCommand string
-	Violations      int
+	CommandCount      int
+	RiskScore         float64
+	LastActivity      time.Time
+	MostUsedCommand   string
+	Violations        int
+	InvalidAttempts   int // NUEVO: Intentos de comandos inválidos
 }
